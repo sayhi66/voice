@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>음성안내 지도</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --primary: #003b6f;
+      --success: #0a6b2b;
+      --danger: #8b0000;
+      --text: #111111;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      font-family: Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .zone {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 16px;
+      position: relative;
+    }
+
+    .zone-top {
+      background: linear-gradient(180deg, #e4f5e9 0%, #d7f0e0 100%);
+      border-bottom: 6px solid var(--primary);
+    }
+
+    .zone-bottom {
+      background: linear-gradient(180deg, #ffe9e9 0%, #ffd9d9 100%);
+    }
+
+    .zone-icon {
+      font-size: 72px;
+      line-height: 1;
+      margin-bottom: 12px;
+    }
+
+    .zone-title {
+      font-size: 40px;
+      font-weight: 900;
+      color: var(--primary);
+      margin: 0 0 10px 0;
+    }
+
+    .zone-desc {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 0;
+      color: #333;
+    }
+
+    .badge {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--primary);
+      background: #fff;
+      border: 2px solid var(--primary);
+      border-radius: 12px;
+      padding: 6px 14px;
+    }
+
+    .status-line {
+      font-size: 18px;
+      font-weight: 700;
+      margin-top: 14px;
+      color: #333;
+      max-width: 90%;
+    }
+
+    .result-box {
+      font-size: 18px;
+      line-height: 1.5;
+      margin-top: 10px;
+      max-width: 92%;
+      max-height: 28vh;
+      overflow-y: auto;
+      text-align: left;
+    }
+
+    .result-box h2 {
+      font-size: 22px;
+      color: var(--primary);
+      margin: 0 0 8px 0;
+    }
+
+    .result-box ol {
+      margin: 0;
+      padding-left: 24px;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (max-width: 600px) {
+      .zone-icon { font-size: 56px; }
+      .zone-title { font-size: 30px; }
+      .zone-desc { font-size: 18px; }
+      .status-line { font-size: 15px; }
+      .result-box { font-size: 15px; }
+    }
+  </style>
+</head>
+<body>
+  <main id="topZone" class="zone zone-top" aria-label="시작: 가고 싶은 장소 말하기">
+    <div class="badge" id="currentLocationBadge">현재 위치: 정문</div>
+    <div class="zone-icon" aria-hidden="true">🎤</div>
+    <h1 class="zone-title">말하기</h1>
+    <p class="zone-desc">화면 위쪽을 누르고<br />가고 싶은 장소를 말하세요</p>
+    <p class="status-line" id="status" role="status" aria-live="polite">준비 중입니다.</p>
+  </main>
+
+  <section id="bottomZone" class="zone zone-bottom" aria-label="다시 듣기">
+    <div class="zone-icon" aria-hidden="true">🔁</div>
+    <h1 class="zone-title">다시 듣기</h1>
+    <p class="zone-desc">화면 아래쪽을 누르면<br />마지막 안내를 다시 들려줍니다</p>
+    <div class="result-box" id="result" role="region" aria-live="polite" aria-atomic="true">
+      <p>장소 안내 결과가 여기에 표시됩니다.</p>
+    </div>
+  </section>
+
+  <p class="sr-only" id="srInstruction">화면 위쪽 절반은 말하기, 아래쪽 절반은 다시 듣기입니다.</p>
+
+  <script>
+    const LOCATIONS = {
+      gate: { name: "정문", aliases: ["정문", "입구", "현관"] },
+      lobby2f: { name: "2층 로비", aliases: ["2층 로비", "이층 로비", "2층로비"] },
+      lobby3f: { name: "3층 로비", aliases: ["3층 로비", "삼층 로비"] },
+      lobby4f: { name: "4층 로비", aliases: ["4층 로비", "4층로비"] },
+      library: { name: "도서관", aliases: ["도서관"] },
+      science: { name: "과학실", aliases: ["과학실"] },
+      dubit: { name: "두빛나래", aliases: ["두빛나래", "두 빛나래", "주 빛나래"] }
+    };
+
+    const ROUTES = {
+      "gate__lobby2f": ["정문에서 직진하세요.", "복도 끝에서 왼쪽으로 이동하세요.", "엘리베이터를 타고 2층으로 올라가세요.", "엘리베이터를 나오면 2층 로비입니다."],
+      "gate__library": ["정문에서 직진하세요.", "복도 끝에서 왼쪽으로 이동하세요.", "엘리베이터를 타고 2층으로 올라가세요.", "오른쪽 복도 끝에 도서관이 있습니다."],
+      "gate__science": ["정문에서 건물 안으로 들어가세요.", "복도를 따라 직진하세요.", "첫 번째 계단에서 3층으로 올라가세요.", "왼쪽 복도에 과학실이 있습니다."],
+      "gate__dubit": ["정문 방향으로 이동하세요.", "계단을 이용해 2층으로 올라가세요.", "2층에서 오른쪽으로 47보 이동하세요.", "오른쪽에 두빛나래가 있습니다.", "문은 자동문입니다."],
+      "lobby2f__gate": ["2층 로비에서 엘리베이터를 타고 1층으로 내려가세요.", "1층에서 오른쪽 복도로 이동하세요.", "복도 끝까지 직진하면 정문이 있습니다."],
+      "lobby2f__library": ["2층 로비에서 오른쪽 복도로 이동하세요.", "복도 끝까지 직진하세요.", "복도 끝에 도서관이 있습니다."],
+      "lobby2f__science": ["2층 로비에서 계단을 찾아 3층으로 올라가세요.", "왼쪽 복도에 과학실이 있습니다."],
+      "lobby2f__dubit": ["2층 로비에서 왼쪽으로 이동하세요.", "47보 이동하세요.", "오른쪽에 두빛나래가 있습니다.", "문은 자동문입니다."],
+      "library__gate": ["도서관에서 왼쪽 복도로 이동하세요.", "엘리베이터를 타고 1층으로 내려가세요.", "1층에서 오른쪽 복도로 이동하세요.", "복도 끝까지 직진하면 정문이 있습니다."],
+      "library__lobby2f": ["도서관에서 왼쪽 복도로 이동하세요.", "복도를 따라 직진하면 2층 로비가 있습니다."],
+      "library__science": ["도서관에서 왼쪽 복도로 이동하세요.", "가까운 계단을 이용해 3층으로 올라가세요.", "왼쪽 복도에 과학실이 있습니다."],
+      "library__dubit": ["도서관에서 왼쪽 복도로 이동하세요.", "47보 이동하세요.", "오른쪽에 두빛나래가 있습니다.", "문은 자동문입니다."],
+      "science__gate": ["과학실에서 오른쪽 복도로 이동하세요.", "가까운 계단을 이용해 1층으로 내려가세요.", "1층에서 복도를 따라 직진하세요.", "복도 끝에 정문이 있습니다."],
+      "science__lobby2f": ["과학실에서 오른쪽 복도로 이동하세요.", "가까운 계단을 이용해 2층으로 내려가세요.", "계단을 나오면 2층 로비가 있습니다."],
+      "science__library": ["과학실에서 오른쪽 복도로 이동하세요.", "가까운 계단을 이용해 2층으로 내려가세요.", "2층에서 오른쪽 복도 끝에 도서관이 있습니다."],
+      "science__dubit": ["과학실에서 오른쪽 복도로 이동하세요.", "가까운 계단을 이용해 2층으로 내려가세요.", "2층에서 왼쪽으로 47보 이동하세요.", "오른쪽에 두빛나래가 있습니다.", "문은 자동문입니다."],
+      "dubit__gate": ["두빛나래에서 나와 왼쪽으로 47보 이동하세요.", "2층에서 엘리베이터를 타고 1층으로 내려가세요.", "1층에서 오른쪽 복도로 이동하세요.", "복도 끝까지 직진하면 정문이 있습니다."],
+      "dubit__lobby2f": ["두빛나래에서 나와 왼쪽으로 47보 이동하세요.", "이동하시면 2층 로비가 있습니다."],
+      "dubit__library": ["두빛나래에서 나와 왼쪽으로 47보 이동하세요.", "2층 로비에서 오른쪽 복도로 이동하세요.", "복도 끝까지 직진하면 도서관이 있습니다."],
+      "dubit__science": ["두빛나래에서 나와 왼쪽으로 47보 이동하세요.", "2층 로비에서 가까운 계단을 이용해 3층으로 올라가세요.", "왼쪽 복도에 과학실이 있습니다."]
+    };
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const topZone = document.getElementById("topZone");
+    const bottomZone = document.getElementById("bottomZone");
+    const statusText = document.getElementById("status");
+    const result = document.getElementById("result");
+    const currentLocationBadge = document.getElementById("currentLocationBadge");
+
+    let recognition = null;
+    let isRecognizing = false;
+    let micReady = false;
+    let koreanVoice = null;
+    let currentLocationId = "gate";
+    let lastSpokenText = "";
+
+    function pickKoreanVoice() {
+      const voices = window.speechSynthesis.getVoices();
+      koreanVoice = voices.find(v => v.lang === "ko-KR") || voices.find(v => v.lang && v.lang.startsWith("ko")) || null;
+    }
+
+    if ("speechSynthesis" in window) {
+      pickKoreanVoice();
+      window.speechSynthesis.onvoiceschanged = pickKoreanVoice;
+    }
+
+    function speak(text) {
+      if (!("speechSynthesis" in window)) return;
+      lastSpokenText = text;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "ko-KR";
+      if (koreanVoice) utterance.voice = koreanVoice;
+      utterance.rate = 0.88;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function announce(text) {
+      statusText.textContent = text;
+      speak(text);
+    }
+
+    function getCurrentLocationId() {
+      const params = new URLSearchParams(window.location.search);
+      const fromParam = params.get("from");
+      if (fromParam && LOCATIONS[fromParam]) return fromParam;
+      return "gate";
+    }
+
+    function getRoute(fromId, toId) {
+      return ROUTES[`${fromId}__${toId}`] || null;
+    }
+
+    function normalizeText(text) {
+      return text.replace(/\s+/g, "").toLowerCase();
+    }
+
+    function findDestinationId(userText) {
+      const normalizedText = normalizeText(userText);
+      const candidates = Object.keys(LOCATIONS)
+        .filter(id => id !== currentLocationId)
+        .flatMap(id => LOCATIONS[id].aliases.map(alias => ({ id, alias })))
+        .filter(item => normalizedText.includes(normalizeText(item.alias)))
+        .sort((a, b) => normalizeText(b.alias).length - normalizeText(a.alias).length);
+      return candidates[0] ? candidates[0].id : null;
+    }
+
+    function setResultHTML(html, spokenText) {
+      result.innerHTML = html;
+      if (spokenText !== undefined) lastSpokenText = spokenText;
+    }
+
+    function showDirections(destinationId) {
+      const destinationName = LOCATIONS[destinationId].name;
+      const fromName = LOCATIONS[currentLocationId].name;
+
+      if (destinationId === currentLocationId) {
+        const msg = `이미 ${destinationName}에 있습니다.`;
+        setResultHTML(`<p>${msg}</p>`, msg);
+        announce(msg);
+        return;
+      }
+
+      const steps = getRoute(currentLocationId, destinationId);
+      if (!steps) {
+        const msg = `${fromName}에서 ${destinationName}까지 안내가 아직 등록되지 않았습니다.`;
+        setResultHTML(`<p>${msg}</p>`, msg);
+        announce(`죄송합니다. ${fromName}에서 ${destinationName}까지 가는 안내가 아직 없습니다.`);
+        return;
+      }
+
+      const spokenFull = `${fromName}에서 ${destinationName}까지 안내를 시작합니다. ${steps.join(" ")}`;
+      setResultHTML(`<h2>${fromName} → ${destinationName}</h2><ol>${steps.map(step => `<li>${step}</li>`).join("")}</ol>`, spokenFull);
+      statusText.textContent = `${destinationName} 안내를 시작합니다.`;
+      speak(spokenFull);
+    }
+
+    async function requestMicrophonePermission() {
+      if (!window.isSecureContext) {
+        announce("보안 연결(https)에서 접속해야 마이크를 사용할 수 있습니다.");
+        return false;
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        announce("이 브라우저에서는 마이크를 사용할 수 없습니다.");
+        return false;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+        statusText.textContent = "마이크 권한이 허용되었습니다.";
+        return true;
+      } catch (error) {
+        if (error.name === "NotAllowedError") {
+          announce("마이크 권한이 거부되었습니다. 브라우저 설정에서 마이크를 허용해주세요.");
+        } else {
+          announce("마이크를 사용할 수 없습니다. 설정을 확인해주세요.");
+        }
+        return false;
+      }
+    }
+
+    function startRecognition() {
+      if (!recognition) {
+        announce("이 브라우저는 음성 인식을 지원하지 않습니다.");
+        return;
+      }
+      if (isRecognizing) return;
+      try {
+        recognition.start();
+        isRecognizing = true;
+        statusText.textContent = "듣고 있습니다. 가고 싶은 장소를 말씀해주세요.";
+      } catch (error) {
+        statusText.textContent = "음성 인식을 시작할 수 없습니다.";
+      }
+    }
+
+    async function handleTalk() {
+      if (micReady) {
+        startRecognition();
+        return;
+      }
+      const granted = await requestMicrophonePermission();
+      if (granted) {
+        micReady = true;
+        speak("마이크 권한이 허용되었습니다. 이제 가고 싶은 장소를 말씀해주세요.");
+        startRecognition();
+      }
+    }
+
+    function repeatLast() {
+      if (!lastSpokenText) {
+        speak("다시 들을 안내가 없습니다.");
+        return;
+      }
+      speak(lastSpokenText);
+    }
+
+    function introText() {
+      return "안녕하세요. 비아고 음성 안내 시스템입니다. 가고 싶은 장소를 말씀해주세요.";
+    }
+
+    function playIntro() {
+      const msg = introText();
+      statusText.textContent = `현재 위치: ${LOCATIONS[currentLocationId].name}`;
+      lastSpokenText = msg;
+      speak(msg);
+    }
+
+    topZone.addEventListener("pointerup", handleTalk);
+    bottomZone.addEventListener("pointerup", repeatLast);
+
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.lang = "ko-KR";
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = (event) => {
+        const userText = event.results[0][0].transcript;
+        statusText.textContent = `인식된 말: ${userText}`;
+        const destinationId = findDestinationId(userText);
+        if (destinationId) {
+          showDirections(destinationId);
+        } else {
+          const registeredNames = Object.values(LOCATIONS).map(loc => loc.name).join(", ");
+          const msg = `"${userText}"에 대한 안내가 없습니다. 등록된 장소: ${registeredNames}`;
+          setResultHTML(`<p>"${userText}"에 대한 안내가 없습니다.</p><p>등록된 장소: ${registeredNames}</p>`, msg);
+          speak("죄송합니다. 해당 장소의 안내가 없습니다. 다시 한 번 말씀해주세요.");
+        }
+      };
+
+      recognition.onerror = (event) => {
+        isRecognizing = false;
+        if (event.error === "not-allowed") {
+          announce("마이크 권한이 없습니다. 브라우저 설정에서 마이크를 허용해주세요.");
+        } else if (event.error === "no-speech") {
+          announce("음성이 들리지 않았습니다. 다시 말씀해주세요.");
+        } else {
+          statusText.textContent = `음성 인식 오류: ${event.error}`;
+        }
+      };
+
+      recognition.onend = () => {
+        isRecognizing = false;
+      };
+    } else {
+      announce("이 브라우저는 음성 인식을 지원하지 않습니다.");
+    }
+
+    window.addEventListener("load", () => {
+      currentLocationId = getCurrentLocationId();
+      currentLocationBadge.textContent = `현재 위치: ${LOCATIONS[currentLocationId].name}`;
+      setTimeout(playIntro, 300);
+    });
+  </script>
+</body>
+</html>
