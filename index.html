@@ -31,6 +31,18 @@
       flex-direction: column;
     }
 
+    .debugBar {
+      font-size: 13px;
+      font-weight: 700;
+      padding: 6px 10px;
+      background: #222;
+      color: #0f0;
+      white-space: pre-wrap;
+      line-height: 1.4;
+      max-height: 22vh;
+      overflow-y: auto;
+    }
+
     .zone {
       flex: 1;
       display: flex;
@@ -52,20 +64,20 @@
     }
 
     .zone-icon {
-      font-size: 72px;
+      font-size: 64px;
       line-height: 1;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     .zone-title {
-      font-size: 40px;
+      font-size: 34px;
       font-weight: 900;
       color: var(--primary);
-      margin: 0 0 10px 0;
+      margin: 0 0 8px 0;
     }
 
     .zone-desc {
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 700;
       margin: 0;
       color: #333;
@@ -73,69 +85,51 @@
 
     .badge {
       position: absolute;
-      top: 10px;
+      top: 8px;
       left: 50%;
       transform: translateX(-50%);
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 800;
       color: var(--primary);
       background: #fff;
       border: 2px solid var(--primary);
       border-radius: 12px;
-      padding: 6px 14px;
+      padding: 5px 12px;
     }
 
     .status-line {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 700;
-      margin-top: 14px;
+      margin-top: 10px;
       color: #333;
       max-width: 90%;
     }
 
     .result-box {
-      font-size: 18px;
+      font-size: 16px;
       line-height: 1.5;
-      margin-top: 10px;
+      margin-top: 8px;
       max-width: 92%;
-      max-height: 28vh;
+      max-height: 20vh;
       overflow-y: auto;
       text-align: left;
     }
 
     .result-box h2 {
-      font-size: 22px;
+      font-size: 20px;
       color: var(--primary);
-      margin: 0 0 8px 0;
+      margin: 0 0 6px 0;
     }
 
     .result-box ol {
       margin: 0;
-      padding-left: 24px;
-    }
-
-    .sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
-    }
-
-    @media (max-width: 600px) {
-      .zone-icon { font-size: 56px; }
-      .zone-title { font-size: 30px; }
-      .zone-desc { font-size: 18px; }
-      .status-line { font-size: 15px; }
-      .result-box { font-size: 15px; }
+      padding-left: 22px;
     }
   </style>
 </head>
 <body>
+  <div class="debugBar" id="debugBar">디버그 로그가 여기 표시됩니다.</div>
+
   <main id="topZone" class="zone zone-top" aria-label="시작: 가고 싶은 장소 말하기">
     <div class="badge" id="currentLocationBadge">현재 위치: 정문</div>
     <div class="zone-icon" aria-hidden="true">🎤</div>
@@ -144,16 +138,14 @@
     <p class="status-line" id="status" role="status" aria-live="polite">준비 중입니다.</p>
   </main>
 
-  <section id="bottomZone" class="zone zone-bottom" aria-label="다시 듣기">
+  <section id="bottomZone" class="zone zone-bottom" aria-label="다시 듣기 / 소리 테스트">
     <div class="zone-icon" aria-hidden="true">🔁</div>
-    <h1 class="zone-title">다시 듣기</h1>
-    <p class="zone-desc">화면 아래쪽을 누르면<br />마지막 안내를 다시 들려줍니다</p>
+    <h1 class="zone-title">다시 듣기 / 소리 테스트</h1>
+    <p class="zone-desc">화면 아래쪽을 누르면<br />마지막 안내 또는 테스트 음성이 나옵니다</p>
     <div class="result-box" id="result" role="region" aria-live="polite" aria-atomic="true">
       <p>장소 안내 결과가 여기에 표시됩니다.</p>
     </div>
   </section>
-
-  <p class="sr-only" id="srInstruction">화면 위쪽 절반은 말하기, 아래쪽 절반은 다시 듣기입니다.</p>
 
   <script>
     const LOCATIONS = {
@@ -195,6 +187,7 @@
     const statusText = document.getElementById("status");
     const result = document.getElementById("result");
     const currentLocationBadge = document.getElementById("currentLocationBadge");
+    const debugBar = document.getElementById("debugBar");
 
     let recognition = null;
     let isRecognizing = false;
@@ -202,28 +195,65 @@
     let koreanVoice = null;
     let currentLocationId = "gate";
     let lastSpokenText = "";
+    let currentUtterance = null;
+
+    function log(msg) {
+      const time = new Date().toLocaleTimeString("ko-KR", { hour12: false });
+      debugBar.textContent = `[${time}] ${msg}\n` + debugBar.textContent;
+    }
+
+    log(`speechSynthesis 지원 여부: ${"speechSynthesis" in window}`);
+    log(`SpeechRecognition 지원 여부: ${!!SpeechRecognition}`);
+    log(`isSecureContext(https 여부): ${window.isSecureContext}`);
 
     function pickKoreanVoice() {
+      if (!("speechSynthesis" in window)) return;
       const voices = window.speechSynthesis.getVoices();
+      log(`사용 가능한 voice 개수: ${voices.length}`);
       koreanVoice = voices.find(v => v.lang === "ko-KR") || voices.find(v => v.lang && v.lang.startsWith("ko")) || null;
+      log(`한국어 voice 찾음: ${koreanVoice ? koreanVoice.name + " (" + koreanVoice.lang + ")" : "못 찾음 (기본 voice로 시도)"}`);
     }
 
     if ("speechSynthesis" in window) {
       pickKoreanVoice();
       window.speechSynthesis.onvoiceschanged = pickKoreanVoice;
+
+      setInterval(() => {
+        if (window.speechSynthesis.speaking) {
+          window.speechSynthesis.resume();
+        }
+      }, 5000);
     }
 
     function speak(text) {
-      if (!("speechSynthesis" in window)) return;
+      log(`speak() 호출됨: "${text.slice(0, 30)}..."`);
+      if (!("speechSynthesis" in window)) {
+        log("오류: 이 브라우저는 speechSynthesis를 지원하지 않습니다.");
+        return;
+      }
       lastSpokenText = text;
       window.speechSynthesis.cancel();
+
       const utterance = new SpeechSynthesisUtterance(text);
+      currentUtterance = utterance;
       utterance.lang = "ko-KR";
       if (koreanVoice) utterance.voice = koreanVoice;
-      utterance.rate = 0.88;
+      utterance.rate = 0.95;
       utterance.pitch = 1.0;
       utterance.volume = 1.0;
+
+      utterance.onstart = () => log("재생 시작됨 (onstart)");
+      utterance.onend = () => log("재생 끝남 (onend)");
+      utterance.onerror = (e) => log(`오류 발생 (onerror): ${e.error}`);
+
       window.speechSynthesis.speak(utterance);
+
+      setTimeout(() => {
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+          log("일시정지 상태 감지되어 resume() 호출함");
+        }
+      }, 100);
     }
 
     function announce(text) {
@@ -299,8 +329,10 @@
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         stream.getTracks().forEach(track => track.stop());
         statusText.textContent = "마이크 권한이 허용되었습니다.";
+        log("마이크 권한 허용됨");
         return true;
       } catch (error) {
+        log(`마이크 권한 오류: ${error.name}`);
         if (error.name === "NotAllowedError") {
           announce("마이크 권한이 거부되었습니다. 브라우저 설정에서 마이크를 허용해주세요.");
         } else {
@@ -320,12 +352,15 @@
         recognition.start();
         isRecognizing = true;
         statusText.textContent = "듣고 있습니다. 가고 싶은 장소를 말씀해주세요.";
+        log("음성 인식 시작");
       } catch (error) {
         statusText.textContent = "음성 인식을 시작할 수 없습니다.";
+        log(`음성 인식 시작 오류: ${error.message}`);
       }
     }
 
     async function handleTalk() {
+      log("상단 영역 탭됨 (handleTalk)");
       if (micReady) {
         startRecognition();
         return;
@@ -339,8 +374,9 @@
     }
 
     function repeatLast() {
+      log("하단 영역 탭됨 (repeatLast)");
       if (!lastSpokenText) {
-        speak("다시 들을 안내가 없습니다.");
+        speak("안녕하세요. 소리 테스트입니다. 이 소리가 들리면 정상 작동 중입니다.");
         return;
       }
       speak(lastSpokenText);
@@ -383,6 +419,7 @@
 
       recognition.onerror = (event) => {
         isRecognizing = false;
+        log(`음성 인식 오류: ${event.error}`);
         if (event.error === "not-allowed") {
           announce("마이크 권한이 없습니다. 브라우저 설정에서 마이크를 허용해주세요.");
         } else if (event.error === "no-speech") {
@@ -402,6 +439,7 @@
     window.addEventListener("load", () => {
       currentLocationId = getCurrentLocationId();
       currentLocationBadge.textContent = `현재 위치: ${LOCATIONS[currentLocationId].name}`;
+      log("페이지 로드 완료, 자동 안내 시도");
       setTimeout(playIntro, 300);
     });
   </script>
