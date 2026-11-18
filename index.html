@@ -31,18 +31,6 @@
       flex-direction: column;
     }
 
-    .debugBar {
-      font-size: 13px;
-      font-weight: 700;
-      padding: 6px 10px;
-      background: #222;
-      color: #0f0;
-      white-space: pre-wrap;
-      line-height: 1.4;
-      max-height: 22vh;
-      overflow-y: auto;
-    }
-
     .zone {
       flex: 1;
       display: flex;
@@ -128,8 +116,6 @@
   </style>
 </head>
 <body>
-  <div class="debugBar" id="debugBar">디버그 로그가 여기 표시됩니다.</div>
-
   <main id="topZone" class="zone zone-top" aria-label="시작: 가고 싶은 장소 말하기">
     <div class="badge" id="currentLocationBadge">현재 위치: 정문</div>
     <div class="zone-icon" aria-hidden="true">🎤</div>
@@ -150,36 +136,30 @@
   <script>
     const LOCATIONS = {
       gate: { name: "정문", aliases: ["정문", "입구", "현관"] },
-      lobby2f: { name: "2층 로비", aliases: ["2층 로비", "이층 로비", "2층로비"] },
-      lobby3f: { name: "3층 로비", aliases: ["3층 로비", "삼층 로비"] },
-      lobby4f: { name: "4층 로비", aliases: ["4층 로비", "4층로비"] },
-      library: { name: "도서관", aliases: ["도서관"] },
-      science: { name: "과학실", aliases: ["과학실"] },
-      dubit: { name: "두빛나래", aliases: ["두빛나래", "두 빛나래", "주 빛나래"] }
+      l2: { name: "2층 로비", aliases: ["2층 로비", "이층 로비", "2층로비"] },
+      bc: { name: "방송실"},
+      library: {name: "도서관", aliases: ["도서관"] },
+      science: {name: "과학실", aliases: ["과학실"] },
+      dubit: {name: "두빛나래", aliases: ["두빛나래", "두 빛나래", "주 빛나래"] },
+      cap: {name: "교장실", aliases:["교 장실", "프레진던트"] },
+      ad:{name: "행정실", aliases:["행 정실","행정실"] },
+      sp: {name: "과학 준비실", aliases: ["과학 준비실", "과학준비실"] },
+      m: { name: "음악실", aliases:["음악실"]},
+      to: { name: "2층 교무실", aliases:["교무실","2층교무실"] }
     };
 
     const ROUTES = {
-      "gate__lobby2f": ["정문에서 직진하세요.", "복도 끝에서 왼쪽으로 이동하세요.", "엘리베이터를 타고 2층으로 올라가세요.", "엘리베이터를 나오면 2층 로비입니다."],
-      "gate__library": ["정문에서 직진하세요.", "복도 끝에서 왼쪽으로 이동하세요.", "엘리베이터를 타고 2층으로 올라가세요.", "오른쪽 복도 끝에 도서관이 있습니다."],
+      "gate__l2": ["정문에서 10보 직진하세요.", "1층 계단을 따라 올라가세요"],
+      "gate__library": ["정문에서 10보 직진하세요.", "좌회전.", "엘리베이터를 타고 2층으로 올라가세요.", "오른쪽 복도 끝에 도서관이 있습니다."],
       "gate__science": ["정문에서 건물 안으로 들어가세요.", "복도를 따라 직진하세요.", "첫 번째 계단에서 3층으로 올라가세요.", "왼쪽 복도에 과학실이 있습니다."],
-      "gate__dubit": ["정문 방향으로 이동하세요.", "계단을 이용해 2층으로 올라가세요.", "2층에서 오른쪽으로 47보 이동하세요.", "오른쪽에 두빛나래가 있습니다.", "문은 자동문입니다."],
-      "lobby2f__gate": ["2층 로비에서 엘리베이터를 타고 1층으로 내려가세요.", "1층에서 오른쪽 복도로 이동하세요.", "복도 끝까지 직진하면 정문이 있습니다."],
-      "lobby2f__library": ["2층 로비에서 오른쪽 복도로 이동하세요.", "복도 끝까지 직진하세요.", "복도 끝에 도서관이 있습니다."],
-      "lobby2f__science": ["2층 로비에서 계단을 찾아 3층으로 올라가세요.", "왼쪽 복도에 과학실이 있습니다."],
-      "lobby2f__dubit": ["2층 로비에서 왼쪽으로 이동하세요.", "47보 이동하세요.", "오른쪽에 두빛나래가 있습니다.", "문은 자동문입니다."],
-      "library__gate": ["도서관에서 왼쪽 복도로 이동하세요.", "엘리베이터를 타고 1층으로 내려가세요.", "1층에서 오른쪽 복도로 이동하세요.", "복도 끝까지 직진하면 정문이 있습니다."],
-      "library__lobby2f": ["도서관에서 왼쪽 복도로 이동하세요.", "복도를 따라 직진하면 2층 로비가 있습니다."],
-      "library__science": ["도서관에서 왼쪽 복도로 이동하세요.", "가까운 계단을 이용해 3층으로 올라가세요.", "왼쪽 복도에 과학실이 있습니다."],
-      "library__dubit": ["도서관에서 왼쪽 복도로 이동하세요.", "47보 이동하세요.", "오른쪽에 두빛나래가 있습니다.", "문은 자동문입니다."],
-      "science__gate": ["과학실에서 오른쪽 복도로 이동하세요.", "가까운 계단을 이용해 1층으로 내려가세요.", "1층에서 복도를 따라 직진하세요.", "복도 끝에 정문이 있습니다."],
-      "science__lobby2f": ["과학실에서 오른쪽 복도로 이동하세요.", "가까운 계단을 이용해 2층으로 내려가세요.", "계단을 나오면 2층 로비가 있습니다."],
-      "science__library": ["과학실에서 오른쪽 복도로 이동하세요.", "가까운 계단을 이용해 2층으로 내려가세요.", "2층에서 오른쪽 복도 끝에 도서관이 있습니다."],
-      "science__dubit": ["과학실에서 오른쪽 복도로 이동하세요.", "가까운 계단을 이용해 2층으로 내려가세요.", "2층에서 왼쪽으로 47보 이동하세요.", "오른쪽에 두빛나래가 있습니다.", "문은 자동문입니다."],
-      "dubit__gate": ["두빛나래에서 나와 왼쪽으로 47보 이동하세요.", "2층에서 엘리베이터를 타고 1층으로 내려가세요.", "1층에서 오른쪽 복도로 이동하세요.", "복도 끝까지 직진하면 정문이 있습니다."],
-      "dubit__lobby2f": ["두빛나래에서 나와 왼쪽으로 47보 이동하세요.", "이동하시면 2층 로비가 있습니다."],
-      "dubit__library": ["두빛나래에서 나와 왼쪽으로 47보 이동하세요.", "2층 로비에서 오른쪽 복도로 이동하세요.", "복도 끝까지 직진하면 도서관이 있습니다."],
-      "dubit__science": ["두빛나래에서 나와 왼쪽으로 47보 이동하세요.", "2층 로비에서 가까운 계단을 이용해 3층으로 올라가세요.", "왼쪽 복도에 과학실이 있습니다."]
-    };
+      "gate__sp":["정문에서 8보 직진하세요","우회전해서 39보 직진하세요","오른쪽에 문이 있습니다"],
+      "gate__cap":["정문에서 8보 직진하세요","우회전해서 8보 직진하세요","오른쪽에 문이 있습니다"],
+      "gate__ad":["정문에서 8보 직진하세요","좌회전해서 8보 직진하세요","오른쪽에 문이 있습니다"],
+      "gate__bc":["정문에서 8보 직진하세요","우회전해서 8보 직진하세요","오른쪽에 문이 있습니다"],
+      "gate__to":["교무실은 2층에 있습니다",],
+      "gate__m":["음악실은 2층에 있습니다"] ,
+      "gate__dubit":["두빛나래는 2층에 있습니다"]
+         };
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const topZone = document.getElementById("topZone");
@@ -187,7 +167,6 @@
     const statusText = document.getElementById("status");
     const result = document.getElementById("result");
     const currentLocationBadge = document.getElementById("currentLocationBadge");
-    const debugBar = document.getElementById("debugBar");
 
     let recognition = null;
     let isRecognizing = false;
@@ -197,10 +176,7 @@
     let lastSpokenText = "";
     let currentUtterance = null;
 
-    function log(msg) {
-      const time = new Date().toLocaleTimeString("ko-KR", { hour12: false });
-      debugBar.textContent = `[${time}] ${msg}\n` + debugBar.textContent;
-    }
+    function log(msg) {}
 
     log(`speechSynthesis 지원 여부: ${"speechSynthesis" in window}`);
     log(`SpeechRecognition 지원 여부: ${!!SpeechRecognition}`);
