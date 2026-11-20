@@ -145,10 +145,14 @@
       ad: { name: "행정실", aliases: ["행정실", "행 정실"] },
       sp: { name: "과학 준비실", aliases: ["과학 준비실", "과학준비실"] },
       m: { name: "음악실", aliases:["음악실"]},
-      to: { name: "2층 교무실", aliases:["교무실","2층교무실"] }
+      to: { name: "2층 교무실", aliases:["교무실","2층교무실"] },
+      tw: { name: "남자화장실", aliases:["남자화장실","남자 화장실","남화장실","남자 화장 실"] }
     };
 
+    // 경로 이름 규칙: "출발지__도착지"
+    // NFC 태그 주소: 정문 → index.html?from=gate , 2층 계단 → index.html?from=l2
     const ROUTES = {
+      // ───── 정문에서 출발 (?from=gate) ─────
       "gate__l2": ["정문에서 12보 직진하세요.","1층을 따라 이동하세요."],
       "gate__library": ["정문에서 10보 직진하세요.", "좌회전 한 뒤, 45보 직진하세요."],
       "gate__science": ["정문에서 10보 직진하세요.", "우회전 한 뒤, 18보 직진하세요."],
@@ -158,7 +162,15 @@
       "gate__bc":["정문에서 8보 직진하세요","우회전해서 8보 직진하세요","오른쪽에 문이 있습니다"],
       "gate__to":["교무실은 2층에 있습니다"],
       "gate__m":["음악실은 2층에 있습니다"],
-      "gate__dubit":["두빛나래는 2층에 있습니다"]
+      "gate__dubit":["두빛나래는 2층에 있습니다"],
+
+      // ───── 2층 계단에서 출발 (?from=l2) ─────
+      "l2__to":["현 위치에서 6보 직진하세요"],
+      "l2__m":["음악실은 2층에 있습니다"],
+      "l2__dubit":["두빛나래는 2층에 있습니다"]
+      // 남자화장실 경로: 아래 줄 맨 앞의 // 를 지우고 ○ 에 보 수를 적으세요.
+      // 앞 줄("l2__dubit" 줄) 끝에 쉼표(,)를 꼭 붙이세요.
+      // "l2__tw": ["현 위치에서 ○보 직진하세요.", "○회전해서 ○보 직진하세요.", "○쪽에 문이 있습니다."]
     };
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -175,6 +187,9 @@
     let currentLocationId = "gate";
     let lastSpokenText = "";
     let currentUtterance = null;
+    // NFC로 열면 브라우저가 첫 안내 자동재생을 막을 수 있음.
+    // 소리가 한 번도 안 났으면, 첫 터치(화면 어디든) 때 첫 안내를 들려줌.
+    let introHeard = false;
 
     function log(msg) {}
 
@@ -218,7 +233,7 @@
       utterance.pitch = 1.0;
       utterance.volume = 1.0;
 
-      utterance.onstart = () => log("재생 시작됨 (onstart)");
+      utterance.onstart = () => { introHeard = true; log("재생 시작됨 (onstart)"); };
       utterance.onend = () => log("재생 끝남 (onend)");
       utterance.onerror = (e) => log(`오류 발생 (onerror): ${e.error}`);
 
@@ -324,6 +339,7 @@
         return;
       }
       if (isRecognizing) return;
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
       try {
         recognition.start();
         isRecognizing = true;
@@ -337,6 +353,7 @@
 
     async function handleTalk() {
       log("상단 영역 탭됨 (handleTalk)");
+      if (!introHeard) { playIntro(); return; }
       if (micReady) {
         startRecognition();
         return;
@@ -353,6 +370,7 @@
 
     function repeatLast() {
       log("하단 영역 탭됨 (repeatLast)");
+      if (!introHeard) { playIntro(); return; }
       if (!lastSpokenText) {
         speak("안녕하세요. 소리 테스트입니다. 이 소리가 들리면 정상 작동 중입니다.");
         return;
@@ -361,7 +379,11 @@
     }
 
     function introText() {
-      return "안녕하세요. 비아고 음성 안내 시스템입니다. 화면 위쪽 부분을 눌러 마이크 권한을 허용해주세요.";
+      const here = LOCATIONS[currentLocationId].name;
+      if (micReady) {
+        return `안녕하세요. 비아고 음성 안내 시스템입니다. 현재 위치는 ${here}입니다. 화면 위쪽을 누르고 가고 싶은 장소를 말해주세요.`;
+      }
+      return `안녕하세요. 비아고 음성 안내 시스템입니다. 현재 위치는 ${here}입니다. 화면 위쪽 부분을 눌러 마이크 권한을 허용해주세요.`;
     }
 
     function playIntro() {
