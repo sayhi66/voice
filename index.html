@@ -380,10 +380,11 @@
 
     function introText() {
       const here = LOCATIONS[currentLocationId].name;
+      const greeting = `안녕하세요. 비아고 음성 안내 시스템입니다. 지금 위치는 ${here}입니다.`;
       if (micReady) {
-        return `안녕하세요. 비아고 음성 안내 시스템입니다. 현재 위치는 ${here}입니다. 화면 위쪽을 누르고 가고 싶은 장소를 말해주세요.`;
+        return `${greeting} 화면 위쪽을 누르고 가고 싶은 장소를 말해주세요.`;
       }
-      return `안녕하세요. 비아고 음성 안내 시스템입니다. 현재 위치는 ${here}입니다. 화면 위쪽 부분을 눌러 마이크 권한을 허용해주세요.`;
+      return `${greeting} 화면 위쪽 부분을 눌러 마이크 권한을 허용해주세요.`;
     }
 
     function playIntro() {
